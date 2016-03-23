@@ -1,0 +1,21 @@
+<!-- language file start -->
+client_sync_menu_entry_title#:#Sync Slave Clients
+client_sync_form_header_title#:#Slave Client Synchronisierung
+client_sync_form_start_process#:#Starte Synchronisierung
+sleep_between_soap_requests_label#:#Wartezeit
+sleep_between_soap_requests_info#:#Wartezeit zwischen einzelnen Soap Requests in Sekunden
+perform_sync_started_success#:#Die Synchronisierung der Slave Clients wurde erfolgreich durchgeführt.
+perform_sync_started_exception#:#Bei der Synchronisierung der Slave Clients sind Fehler aufgetreten: %s
+perform_sync_started_failure_sleeptime#:#Die Wartezeit muß zwischen %s Sekunden und %s Sekunden liegen!
+ssco_settings_tab#:#Einstellungen
+ssco_sync_tab#:#Synchronisieren
+client_synchronisation#:#Client Synchronisation
+settings_form_soap_user_login_label#:#SOAP Login
+settings_form_soap_user_login_info#:#Login eines Benutzers mit administrativen Privilegien
+settings_form_soap_user_pass_label#:#SOAP Passwort
+settings_form_soap_user_pass_info#:#Passwort eines Benutzers mit administrativen Privilegien
+settings_form_saved_successfully#:#Die Einstellungen wurden erfolgreich gespeichert.
+sync_type#:#Synchronisierungsart
+sync_objs#:#Objekte synchronisieren
+sync_rbac#:#Rechte synchronisieren
+sync_db#:#Datenbanken aktualisieren

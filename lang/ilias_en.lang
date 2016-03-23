@@ -1,0 +1,21 @@
+<!-- language file start -->
+client_sync_menu_entry_title#:#Sync Slave Clients
+client_sync_form_header_title#:#Slave Client Synchronisation
+client_sync_form_start_process#:#Start Synchronisation
+sleep_between_soap_requests_label#:#Sleeptime
+sleep_between_soap_requests_info#:#Sleeptime between Soap Requests in seconds
+perform_sync_started_success#:#The synchronisation of slave clients has been executed successfully.
+perform_sync_started_exception#:#Errors occured while synchronize slave clients: %s
+perform_sync_started_failure_sleeptime#:#The sleeptime must amounts to %s seconds at minimum and to %s seconds at maximum!
+ssco_settings_tab#:#Settings
+ssco_sync_tab#:#Synchronize
+client_synchronisation#:#Client Synchronisation
+settings_form_soap_user_login_label#:#SOAP Login
+settings_form_soap_user_login_info#:#Login of a user with administrative priveleges
+settings_form_soap_user_pass_label#:#SOAP Password
+settings_form_soap_user_pass_info#:#Password of a user with administrative priveleges
+settings_form_saved_successfully#:#The settings have been saved successfully.
+sync_type#:#Type of Synchronisation
+sync_objs#:#Synchronise Objects
+sync_rbac#:#Synchronise Permissions
+sync_db#:#Update Databases
