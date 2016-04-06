@@ -56,6 +56,8 @@ class sscoSlaveClientSynchronization
 	{
 		foreach((array) $slaveClients as $clientId)
 		{
+			$plugin = new ilSyncSlaveClientObjectsPlugin();
+			$plugin->includeClass('class.sscoSlaveClientObjectAdministration.php');
 			sscoSlaveClientObjectAdministration::getInstance($clientId);
 		}
 	}

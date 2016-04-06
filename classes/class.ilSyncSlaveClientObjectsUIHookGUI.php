@@ -52,23 +52,9 @@ class ilSyncSlaveClientObjectsUIHookGUI extends ilUIHookPluginGUI
 		
 		$pluginConfigLinkHREF = $this->getConfigurationScreenLinkTarget();
 		$pluginConfigLinkTEXT = $this->getPluginObject()->txt('client_synchronisation');
-		
-		if( strtolower($_GET['cmdClass']) == 'ilsyncslaveclientobjectsconfiggui' )
-		{	
-			$pluginConfigLinkCLASS = "MMActive";
-			
-			$menuEntryTpl->setCurrentBlock('disable_administration_menu_entry_active_state');
-			$menuEntryTpl->touchBlock('disable_administration_menu_entry_active_state');
-			$menuEntryTpl->parseCurrentBlock();
-		}
-		else
-		{
-			$pluginConfigLinkCLASS = "MMInactive";
-		}
 
 		$menuEntryTpl->setVariable('PLUGIN_CONFIG_LINK_HREF', $pluginConfigLinkHREF);
 		$menuEntryTpl->setVariable('PLUGIN_CONFIG_LINK_TEXT', $pluginConfigLinkTEXT);
-		$menuEntryTpl->setVariable('PLUGIN_CONFIG_LINK_CLASS', $pluginConfigLinkCLASS);
 		
 		return array(
 			"mode" => ilUIHookPluginGUI::APPEND,

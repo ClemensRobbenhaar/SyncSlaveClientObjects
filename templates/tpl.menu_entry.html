@@ -1,23 +1,5 @@
-<ul class="ilMainMenu">
-	<li class="ilMainMenu">
-		<a class="{PLUGIN_CONFIG_LINK_CLASS}" href="{PLUGIN_CONFIG_LINK_HREF}" alt="{PLUGIN_CONFIG_LINK_TEXT}">{PLUGIN_CONFIG_LINK_TEXT}</a>
+<ul class="nav navbar-nav">
+	<li>
+		<a class="" href="{PLUGIN_CONFIG_LINK_HREF}" alt="{PLUGIN_CONFIG_LINK_TEXT}">{PLUGIN_CONFIG_LINK_TEXT}</a>
 	</li>
 </ul>
-<!-- BEGIN disable_administration_menu_entry_active_state -->
-<script type="text/javascript">
-	(
-		function()
-		{
-			var node = document.getElementById('ilAdvSelListAnchorText_dd_adm');
-			
-			while(node.tagName.toLowerCase() != 'a')
-			{
-				node = node.parentNode;
-			}
-			
-			node.className = 'MMInactive';
-		}
-		
-	)();
-</script>
-<!-- END disable_administration_menu_entry_active_state -->
