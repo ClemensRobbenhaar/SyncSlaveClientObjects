@@ -247,7 +247,7 @@ class sscoSlaveClientObjectAdministration
 		{
 			include_once './Services/Container/classes/class.ilContainerSorting.php';
 			$sort = ilContainerSorting::_getInstance($objId);
-			switch($sort->getSortMode())
+			switch($sort->getSortingSettings()->getSortMode())
 			{
 				case ilContainer::SORT_MANUAL:
 					$params['type'] = 'Manual';
@@ -358,6 +358,8 @@ class sscoSlaveClientObjectAdministration
 		{
 			return $this->createFileObject($objId, $refId);
 		}
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncFileXmlCache.php');
 
 		$fc = new ilSyncFileXmlCache($objId);
 		$this->getSoapClient()->call(
@@ -458,6 +460,8 @@ class sscoSlaveClientObjectAdministration
 		}
 
 		include_once './Modules/HTMLLearningModule/classes/class.ilObjFileBasedLM.php';
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncHtmlXmlCache.php');
 		$hc = ilSyncHtmlXmlCache::getInstance($objId);
 		$this->getSoapClient()->call(
 			'updateHtmlLearningModule',
@@ -1101,10 +1105,10 @@ class sscoSlaveClientObjectAdministration
 		$roles = array();
 		foreach($locations as $location)
 		{
-			$rolf = $GLOBALS['rbacreview']->getRoleFolderIdOfObject($location);
-			if($rolf)
+			#$rolf = $GLOBALS['rbacreview']->getRoleFolderIdOfObject($location);
+			if($location)
 			{
-				foreach((array) $GLOBALS['rbacreview']->getRolesOfRoleFolder($rolf,true) as $role)
+				foreach((array) $GLOBALS['rbacreview']->getRolesOfRoleFolder($location,true) as $role)
 				{
 					if(ilObject::_lookupType($role) != 'role')
 					{
@@ -1113,7 +1117,7 @@ class sscoSlaveClientObjectAdministration
 					}
 					
 					$rdata['global'] = ($location == SYSTEM_FOLDER_ID ? 1 : 0);
-					$rdata['assignable'] = $GLOBALS['rbacreview']->isAssignable($role,$rolf);
+					$rdata['assignable'] = $GLOBALS['rbacreview']->isAssignable($role,$location);
 					$rdata['location'] = $location;
 					$rdata['obj_id'] = $role;
 					$rdata['import_id'] = IL_INST_ID.'::'.$role;
@@ -1122,7 +1126,7 @@ class sscoSlaveClientObjectAdministration
 					// Write role template xml
 					include_once './Services/AccessControl/classes/class.ilRoleXmlExport.php';
 					$rexport = new ilRoleXmlExport();
-					$rexport->addRole($role, $rolf);
+					$rexport->addRole($role, $location);
 					$rexport->write();
 					$rdata['rxml'] = $rexport->xmlDumpMem();
 					
