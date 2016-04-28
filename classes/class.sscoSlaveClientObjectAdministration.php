@@ -251,12 +251,25 @@ class sscoSlaveClientObjectAdministration
 			{
 				case ilContainer::SORT_MANUAL:
 					$params['type'] = 'Manual';
-					break;
 
+					$params['ni_order'] =
+						$sort->getSortingSettings()->getSortNewItemsOrder() ==
+						ilContainer::SORT_NEW_ITEMS_ORDER_TITLE ? "Title" : "Creation";
+
+					$params['ni_position'] =
+						$sort->getSortingSettings()->getSortNewItemsPosition() ==
+						ilContainer::SORT_NEW_ITEMS_POSITION_TOP ? "Top" : "Bottom";
+					break;
+				case ilContainer::SORT_CREATION:
+					$params['type'] = "Creation";
+					break;
 				default:
 					$params['type'] = 'Title';
 					break;
 			}
+			
+			$params['direction'] = $sort->getSortingSettings()->getSortDirection() ==
+				ilContainer::SORT_DIRECTION_ASC ? "Asc" : "Desc";
 
 			$writer->xmlStartTag('Sorting', $params);
 
