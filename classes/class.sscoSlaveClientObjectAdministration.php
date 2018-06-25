@@ -5,7 +5,7 @@
  * performed on slave clients
  *
  * @author		Björn Heyser <bheyser@databay.de>
- * @version		$Id: class.sscoSlaveClientObjectAdministration.php 44880 2013-09-20 07:32:43Z smeyer $
+ * @author Stefan Meyer <smeyer.ilias@gmx.de>
  *
  */
 class sscoSlaveClientObjectAdministration
@@ -35,6 +35,11 @@ class sscoSlaveClientObjectAdministration
 	 * @var string
 	 */
 	private $soapSid = null;
+
+	/**
+	 * @var \ilLogger
+	 */
+	private $logger = null;
 	
 	
 	/**
@@ -46,6 +51,11 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public function __construct($slaveClientId, $soapUser, $soapPass)
 	{
+		global $DIC;
+
+		$this->logger = $DIC->logger()->ssco();
+
+
 		require_once 'Services/WebServices/SOAP/classes/class.ilSoapClient.php';
 		
 		$soapClient = new ilSoapClient();
@@ -58,8 +68,11 @@ class sscoSlaveClientObjectAdministration
 				'login', array($slaveClientId, $soapUser, $soapPass)
 		);
 
+		$this->logger->debug('Response is: ' . $soapSid);
+
 		if( !preg_match('/^[a-zA-Z0-9]+::[a-zA-Z0-9_]+$/', $soapSid) )
 		{
+			$this->logger->error('Calling webservice failed with message: invalid session id returned' );
 			throw new ilException("Cannot create soap session for client : " . $slaveClientId);
 		}
 
@@ -106,27 +119,101 @@ class sscoSlaveClientObjectAdministration
 				array('sid' => $this->getSoapSid())
 			);
 	}
-	
+
+	// Groups
+
+	/**
+	 * @param $objId
+	 * @param $refId
+	 */
+	public function createGroupObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling create event for group '. ilObject::_lookupTitle($objId).' '.$refId);
+		$writer = $this->buildObjectXml($objId, $refId);
+		$remote_ref = $this->readParentId($refId, true);
+		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
+		if($remote_item_ref)
+		{
+			$this->logger->info('Group already created in previous run. Aborting!');
+			return;
+		}
+
+		$new_remote_ref = $this->getSoapClient()->call(
+			'addObject',
+			array(
+				$this->getSoapSid(),
+				$remote_ref,
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+		$this->logger->info('Handling update after creation.');
+		$this->updateGroupObject($objId, $refId);
+		return $new_remote_ref;
+	}
+
 	/**
 	 * @param integer $objId
 	 * @param integer $refId
 	 */
+	public function updateGroupObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling update event for group '. ilObject::_lookupTitle($objId).' '.$refId);
+		if($tree->isDeleted($refId))
+		{
+			return;
+		}
+		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
+		$remote_ref = end($remote_refs);
+		if(!count($remote_refs))
+		{
+			return $this->createGroupObject($objId, $refId);
+		}
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncGroupXmlCache.php');
+
+		$gc = ilSyncGroupXmlCache::getInstanceByObjId($objId);
+		$this->getSoapClient()->call(
+			'updateGroup',
+			array(
+				$this->getSoapSid(),
+				$remote_ref,
+				$gc->getXml()
+			)
+		);
+
+		// Add references
+		$this->addReferences($objId,$refId,$remote_refs);
+	}
+
+
+
+	
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
 	public function createCategoryObject($objId, $refId)
 	{
-		global $tree;
+		global $DIC;
 
+		$tree = $DIC->repositoryTree();
 		include_once './Services/Xml/classes/class.ilXmlWriter.php';
-		$GLOBALS['ilLog']->write(__METHOD__.': Handling create event for category '. ilObject::_lookupTitle($objId).' '.$refId);
 
+		$this->logger->info('Handling create event for category '. ilObject::_lookupTitle($objId).' '.$refId);
 		$writer = $this->buildObjectXml($objId, $refId);
-
 		$remote_ref = $this->readParentId($refId, true);
-
 		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
 		if($remote_item_ref)
 		{
 			// update?
-			$GLOBALS['ilLog']->write(__METHOD__.': Category already created in previous run. Aborting!');
+			$this->logger->info('Category already created in previous run. Aborting!');
 			return;
 		}
 
@@ -138,7 +225,7 @@ class sscoSlaveClientObjectAdministration
 					$writer->xmlDumpMem(FALSE)
 			)
 		);
-		$GLOBALS['ilLog']->write(__METHOD__.': Handling update after creation');
+		$this->logger->info('Handling update after creation.');
 		$this->updateCategoryObject($objId, $refId);
 		return $new_remote_ref;
 	}
@@ -149,18 +236,17 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public function updateCategoryObject($objId, $refId)
 	{
-		global $tree;
-		
-		$GLOBALS['ilLog']->write(__METHOD__.': Handling update event for '. ilObject::_lookupTitle($objId).' '.$refId);
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling update event for '. ilObject::_lookupTitle($objId).' '.$refId);
 		try {
 			$writer = $this->buildObjectXml($objId, $refId, true);
 		}
 		catch(Exception $e) {
-			$GLOBALS['ilLog']->write(__METHOD__.': Read object xml failed for '. ilObject::_lookupTitle($objId).' '.$refId);
+			$this->logger->error('Read object xml failed for '. ilObject::_lookupTitle($objId).' '.$refId);
 			return $this->createCategoryObject($objId, $refId);
 		}
-		//$GLOBALS['ilLog']->write(__METHOD__.': Category xml is '.$writer->xmlDumpMem(FALSE));
-
 		$this->getSoapClient()->call(
 			'updateObjects',
 			array(
@@ -212,6 +298,8 @@ class sscoSlaveClientObjectAdministration
 
 			if(!$params['obj_id'])
 			{
+				$this->logger->error('Missing object id.');
+				$this->logger->logStack();
 				throw new Exception('Missing object id');
 			}
 
@@ -270,7 +358,6 @@ class sscoSlaveClientObjectAdministration
 
 		$writer->xmlEndTag('Object');
 		$writer->xmlEndTag('Objects');
-		#$GLOBALS['ilLog']->write(__METHOD__.': '.$writer->xmlDumpMem(TRUE));
 		return $writer;
 	}
 	
@@ -308,19 +395,16 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public function createFileObject($objId, $refId)
 	{
-		global $tree;
+		global $DIC;
 
-		$GLOBALS['ilLog']->write(__METHOD__.': Handling create event for file '. ilObject::_lookupTitle($objId).' '.$refId);
-
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling create event for file '. ilObject::_lookupTitle($objId).' '.$refId);
 		$writer = $this->buildObjectXml($objId, $refId);
-
 		$remote_parent_ref = $this->readParentId($refId,true);
-
-		//$GLOBALS['ilLog']->write(__METHOD__.': File xml is '.$writer->xmlDumpMem(FALSE));
 		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
 		if($remote_item_ref)
 		{
-			$GLOBALS['ilLog']->write(__METHOD__.': File already created in previous run. Aborting!');
+			$this->logger->info('File already created in previous run. Aborting!');
 			return;
 		}
 
@@ -343,15 +427,14 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public function updateFileObject($objId, $refId)
 	{
-		global $tree;
-		
-		$GLOBALS['ilLog']->write(__METHOD__.': Handling update event for file '. ilObject::_lookupTitle($objId).' '.$refId);
+		global $DIC;
 
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling update event for file '. ilObject::_lookupTitle($objId).' '.$refId);
 		if($tree->isDeleted($refId))
 		{
 			return;
 		}
-		
 		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
 		$remote_ref = end($remote_refs);
 		if(!count($remote_refs))
@@ -410,10 +493,11 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public function createHtlmObject($objId, $refId)
 	{
-		global $tree;
+		global $DIC;
 
-		$GLOBALS['ilLog']->write(__METHOD__.': Handling create event for html learning module '. ilObject::_lookupTitle($objId).' '.$refId);
+		$tree = $DIC->repositoryTree();
 
+		$this->logger->info('Handling create event for html learning module '. ilObject::_lookupTitle($objId).'  '.$refId);
 		$writer = $this->buildObjectXml($objId, $refId);
 
 		$remote_parent_ref = $this->readParentId($refId,true);
@@ -421,7 +505,7 @@ class sscoSlaveClientObjectAdministration
 		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
 		if($remote_item_ref)
 		{
-			$GLOBALS['ilLog']->write(__METHOD__.': HTML already created in previous run. Aborting!');
+			$this->logger->info('HTML already created in previous run. Aborting!');
 			return;
 		}
 
@@ -444,9 +528,11 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public function updateHtlmObject($objId, $refId)
 	{
-		global $tree;
+		global $DIC;
 
-		$GLOBALS['ilLog']->write(__METHOD__.': Handling update event for html '. ilObject::_lookupTitle($objId).' '.$refId);
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling update event for html '. ilObject::_lookupTitle($objId).' '.$refId);
 		if($tree->isDeleted($refId))
 		{
 			return;
@@ -530,8 +616,7 @@ class sscoSlaveClientObjectAdministration
 			)
 		);
 
-		$GLOBALS['ilLog']->write(__METHOD__.': Ref ids for '.$a_import_id.' are '.print_r($ref_ids,true));
-
+		$this->logger->info('Ref ids for '.$a_import_id.' are '.print_r($ref_ids,true));
 		$this->ri_cache[$a_import_id] = ($ref_ids ? $ref_ids : array());
 		return (array) $this->ri_cache[$a_import_id];
 	}
@@ -550,8 +635,7 @@ class sscoSlaveClientObjectAdministration
 			)
 		);
 
-		$GLOBALS['ilLog']->write(__METHOD__.': Ref id parents for '.$a_import_id.' are '.print_r($ref_ids,true));
-
+		$this->logger->info('Ref id parents for '.$a_import_id.' are '.print_r($ref_ids,true));
 		return $ref_ids ? $ref_ids : array();
 	}
 
@@ -585,7 +669,9 @@ class sscoSlaveClientObjectAdministration
 	 */
 	protected function handleRemove($objId,$refId)
 	{
-		global $ilSetting;
+		global $DIC;
+
+		$ilSetting = $DIC->settings();
 
 		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
 		$remote_ref = end($remote_refs);
@@ -610,14 +696,14 @@ class sscoSlaveClientObjectAdministration
 			{
 				foreach($xml->Object as $client_obj)
 				{
-					$GLOBALS['ilLog']->write(__METHOD__.': ------- Found '.(string) $client_obj->Title . ' with import id '. (string) $client_obj->ImportId);
+					$this->logger->info('Found '.(string) $client_obj->Title . ' with import id '. (string) $client_obj->ImportId);
 					$import_id = (string) $client_obj->ImportId;
 					if(preg_match('/^[0-9]+::/', $import_id))
 					{
-						$GLOBALS['ilLog']->write(__METHOD__.': ++++++++++++++++ Matches');
+						$this->logger->debug('--- matches');
 						continue;
 					}
-					$GLOBALS['ilLog']->write(__METHOD__.': --- Cannot delete non empty category. Aborting!');
+					$this->logger->warning('Cannot delete non empty category. Aborting!');
 					$title = ilObject::_lookupTitle($objId);
 					$client_id = explode('::',$this->getSoapSid());
 					throw new Exception('Cannote delete non empty category with title "'. $title.'" for client ' . $client_id[1] . '. Found "'. (string) $client_obj->Title.'" of type '.(string) $client_obj['type'].'!');
@@ -650,9 +736,6 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public static function getInstance($slaveClientId, $soapUser = '', $soapPass = '')
 	{
-		#$slaveClientAuth = md5("$soapUser::$soapPass");
-		#$instanceKey = "$slaveClientId::$slaveClientAuth";
-
 		$instanceKey = $slaveClientId;
 		
 		if( !isset(self::$instances[$instanceKey]) )
@@ -667,18 +750,20 @@ class sscoSlaveClientObjectAdministration
 	}
 
 	/**
-	 *
+	 * @param $a_ref_id
+	 * @param bool $create_parents
+	 * @return bool|int|mixed|void
 	 */
 	protected function readParentId($a_ref_id, $create_parents = true)
 	{
-		global $tree;
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
 
 		$parent_ref = $tree->getParentId($a_ref_id);
 		$parent_obj = ilObject::_lookupObjId($parent_ref);
 		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$parent_obj);
 		$remote_ref = end($remote_refs);
-
-		$GLOBALS['ilLog']->write(__METHOD__.': '.$parent_obj.' '. $parent_ref);
 
 		if($remote_ref)
 		{
@@ -698,7 +783,17 @@ class sscoSlaveClientObjectAdministration
 		/**
 		 * create parent category
 		 */
-		return $this->createCategoryObject($parent_obj, $parent_ref);
+		switch(ilObject::_lookupType($parent_obj))
+		{
+			case 'cat':
+				return $this->createCategoryObject($parent_obj, $parent_ref);
+			case 'grp':
+				return $this->createGroupObject($parent_obj,$parent_ref);
+
+			default:
+				$this->logger->warning('Invalid parent type given: ' . ilObject::_lookupType($parent_obj));
+		}
+		return $parent_ref;
 	}
 
 	/**
@@ -708,8 +803,9 @@ class sscoSlaveClientObjectAdministration
 	 */
 	protected function addReferences($objId,$refId,$remote_refs)
 	{
-		global $tree;
-		
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
 		$remote_ref = end($remote_refs);
 		
 		$local_refs = $this->getAllReferences($objId);
@@ -766,9 +862,8 @@ class sscoSlaveClientObjectAdministration
 
 
 	/**
-	 * get all undeleted references
-	 * @param <type> $obj_id
-	 * @return <type>
+	 * @param int $obj_id
+	 * @return int[]
 	 */
 	protected function getAllReferences($obj_id)
 	{
@@ -793,7 +888,6 @@ class sscoSlaveClientObjectAdministration
 		$remote_obj = $this->getObjIdByImportId(IL_INST_ID.'::'.$obj_id);
 
 		include_once './Services/MetaData/classes/class.ilMD2XML.php';
-		#$GLOBALS['ilLog']->write(__METHOD__.': obj_id is ' . $obj_id);
 		$md_xml = new ilMD2XML($obj_id,$obj_id,ilObject::_lookupType($obj_id));
 		$md_xml->setExportMode(true);
 		$md_xml->startExport();
@@ -817,7 +911,7 @@ class sscoSlaveClientObjectAdministration
 	 */
 	protected function readRemoteRoles($a_remote_ref, $a_global = true)
 	{
-		$GLOBALS['ilLog']->write(__METHOD__.': '. $a_remote_ref.': '. ($a_global ? 'true' : 'false'));
+		$this->logger->debug('Update remote roles.');
 		return $this->getSoapClient()->call(
 				'getLocalRoles',
 					array(
@@ -864,8 +958,8 @@ class sscoSlaveClientObjectAdministration
 		$writer->xmlElement('ImportId',array(),IL_INST_ID.'::'.$a_role_def['obj_id']);
 		$writer->xmlEndTag('Object');
 		$writer->xmlEndTag('Objects');
-		$GLOBALS['ilLog']->write(__METHOD__.': '.$writer->xmlDumpMem(TRUE));
-		
+
+		$this->logger->dump($writer->xmlDumpMem(true));
 		return $this->getSoapClient()->call(
 				'addRole',
 				array(
@@ -903,12 +997,15 @@ class sscoSlaveClientObjectAdministration
 	 */
 	protected function updateRemoteRolePermissions($a_location)
 	{
-		global $ilDB;
+		global $DIC;
+
+		$ilDB = $DIC->database();
+		$rbacreview = $DIC->rbac()->review();
 
 		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.ilObject::_lookupObjId($a_location),true);
 		$remote_ref = end($remote_refs);
 
-		$parent_roles = $GLOBALS['rbacreview']->getParentRoleIds($a_location);
+		$parent_roles = $rbacreview->getParentRoleIds($a_location);
 		
 		
 		foreach((array) $parent_roles as $role_id => $role_data)
@@ -951,9 +1048,7 @@ class sscoSlaveClientObjectAdministration
 	public function updateRbacImportIds()
 	{
 		$roles = self::readRelevantRoles();
-		//$GLOBALS['ilLog']->write(__METHOD__.': '.print_r($roles,true));
-		$GLOBALS['ilLog']->write(__METHOD__.': '.self::$sync_locations);
-		
+
 		// Get roles of all locations
 		$available_role_locations = array();
 		foreach(self::$sync_locations as $location)
@@ -962,8 +1057,9 @@ class sscoSlaveClientObjectAdministration
 			$remote_ref = end($remote_refs);
 			
 			$remote_roles = $this->readRemoteRoles($remote_ref,$location == SYSTEM_FOLDER_ID ? true : false);
-			$GLOBALS['ilLog']->write(__METHOD__.': Received roles '. print_r($remote_roles,true));
-			
+			$this->logger->info('Received roles: ');
+			$this->logger->dump($remote_roles);
+
 			// Update and delete remote roles
 			$root = simplexml_load_string(utf8_encode(utf8_decode($remote_roles)));
 			
@@ -977,12 +1073,12 @@ class sscoSlaveClientObjectAdministration
 						// Delete this role
 						if($xmlRole['type'] == 'role')
 						{
-							$GLOBALS['ilLog']->write(__METHOD__.': Deleting deprecated role '. (string) $xmlRole->Title.' ('.$xmlRole['obj_id'].') at location '. $location);
+							$this->logger->info('Deleting deprecated role: ' . (string) $xmlRole->Title);
 							$this->deleteRemoteRole($remote_ref, (string) $xmlRole['obj_id']);
 						}
 						else
 						{
-							$GLOBALS['ilLog']->write(__METHOD__.': Ignoring role template '. (string) $xmlRole->Title.' at location '. $location);
+							$this->logger->info('Ignoring role template: ' . (string) $xmlRole->Title .' at location: ' . $location );
 						}
 					}
 					else
@@ -1003,7 +1099,8 @@ class sscoSlaveClientObjectAdministration
 			if(!in_array($idx, $available_role_locations))
 			{
 				// Create this role
-				$GLOBALS['ilLog']->write(__METHOD__.': Adding new local role '. print_r($role,true));
+				$this->logger->info('Adding new local role...');
+				$this->logger->dump($role);
 				$this->addRemoteRole($role);
 			}
 		}
@@ -1032,17 +1129,18 @@ class sscoSlaveClientObjectAdministration
 		$a_title = trim($a_title);
 		foreach(self::$sync_roles as $idx => $role)
 		{
-			$GLOBALS['ilLog']->write(__METHOD__.': Comparing role title: '. $a_title.' with '.$role['title']);
+			$this->logger->info('Comparing role title ' . $a_title .' with ' . $role['title']);
 			if($role['location'] == $a_location)
 			{
 				if($a_title == trim($role['title']))
 				{
-					$GLOBALS['ilLog']->write(__METHOD__.': Found local role '. print_r($role,true));
+					$this->logger->info('Found role: ');
+					$this->logger->dump($role);
 					return $idx;
 				}
 			}
 		}
-		$GLOBALS['ilLog']->write(__METHOD__.': Did not found remote role for title '. $a_title);
+		$this->logger->warning('Cannot find remote role with title ' . $a_title);
 		return FALSE;
 	}
 	
@@ -1052,7 +1150,10 @@ class sscoSlaveClientObjectAdministration
 	 */
 	protected static function readRelevantRoles()
 	{
-		global $ilDB;
+		global $DIC;
+
+		$ilDB = $DIC->database();
+		$logger = $DIC->logger()->scco();
 		
 		if(self::$sync_roles)
 		{
@@ -1070,7 +1171,6 @@ class sscoSlaveClientObjectAdministration
 		{
 			if($GLOBALS['objDefinition']->isAdministrationObject($rbac_type))
 			{
-				#$GLOBALS['ilLog']->write(__METHOD__.': Found adm object '. $rbac_type);
 				if($rbac_type != 'rolf' and $rbac_type != 'adm')
 				{
 					$query = 'SELECT ref_id FROM object_reference obr '.
@@ -1080,7 +1180,6 @@ class sscoSlaveClientObjectAdministration
 					while($row = $res->fetchRow(DB_FETCHMODE_OBJECT))
 					{
 						$locations[] = $row->ref_id;
-						#$GLOBALS['ilLog']->write(__METHOD__.': Found adm object '. $rbac_type.' with ref_id '. $row->ref_id);
 					}
 				}
 			}
@@ -1105,14 +1204,13 @@ class sscoSlaveClientObjectAdministration
 		$roles = array();
 		foreach($locations as $location)
 		{
-			#$rolf = $GLOBALS['rbacreview']->getRoleFolderIdOfObject($location);
 			if($location)
 			{
 				foreach((array) $GLOBALS['rbacreview']->getRolesOfRoleFolder($location,true) as $role)
 				{
 					if(ilObject::_lookupType($role) != 'role')
 					{
-						$GLOBALS['ilLog']->write(__METHOD__.': ********************* Ignoring role/rolt '. ilObject::_lookupTitle($role));
+						$logger->info('Ignoring role/rolt: '  . ilObject::_lookupTitle($role));
 						continue;
 					}
 					
@@ -1136,5 +1234,8 @@ class sscoSlaveClientObjectAdministration
 		}
 		return self::$sync_roles = $roles;
 	}
+
+
+
 }
 ?>

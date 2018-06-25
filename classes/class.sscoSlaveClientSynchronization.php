@@ -25,12 +25,21 @@ class sscoSlaveClientSynchronization
 	 * @var string
 	 */
 	private $soapPass = null;
+
+	/**
+	 * @var \ilLogger
+	 */
+	private $logger = null;
 	
 	/**
 	 * @param ilSetting $sscoSettings
 	 */
 	public function __construct(ilSetting $sscoSettings)
 	{
+		global $DIC;
+
+		$this->logger = $DIC->logger()->scco();
+
 		$soapLogin = $sscoSettings->get('soap_user_login', null);
 		$soapPass = $sscoSettings->get('soap_user_pass', null);
 		
@@ -92,9 +101,10 @@ class sscoSlaveClientSynchronization
 			tobcObjectChangeEvent::EVENT_TYPE_CREATE
 		);
 		
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat'), $eventTypes );
-		
-		$GLOBALS['ilLog']->write('Handling new categories: '. memory_get_peak_usage());
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp'), $eventTypes );
+
+		$this->logger->info('Starting creation of containers ["cat","grp","fold"]...');
+
 		self::processEventList($objChangeEventList, $slaveClients);
 		
 		// process all events regarding to 'cat' objects except create or delete events
@@ -105,18 +115,18 @@ class sscoSlaveClientSynchronization
 			tobcObjectChangeEvent::EVENT_TYPE_RESTORE
 		);
 		
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat'), $eventTypes );
-		
-		$GLOBALS['ilLog']->write('Handling update categories: '. memory_get_peak_usage());
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp'), $eventTypes );
+
+		$this->logger->info('Starting update of containers ["cat","grp","fold"]...');
 		self::processEventList($objChangeEventList, $slaveClients);
 		
-		// process all remove events regarding to 'cat' objects
+		// process all remove events regarding to 'cat','grp' objects
 		
 		$eventTypes = array(
 			tobcObjectChangeEvent::EVENT_TYPE_REMOVE
 		);
 		
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat'), $eventTypes );
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp'), $eventTypes );
 		
 		$GLOBALS['ilLog']->write('Handling delete categories: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
@@ -190,15 +200,25 @@ class sscoSlaveClientSynchronization
 			);
 		}
 		
-		switch( $objChangeEvent->getObjType() )
+		switch($objChangeEvent->getObjType() )
 		{
-			case 'cat':		$method .= 'Category';		break;
-			case 'htlm':	$method .= 'Htlm';			break;
-			case 'file':	$method .= 'File';			break;
+			case 'cat':
+				$method .= 'Category';
+				break;
+			case 'grp':
+				$method .= 'Group';
+				break;
+			case 'htlm':
+				$method .= 'Htlm';
+				break;
+			case 'file':
+				$method .= 'File';
+				break;
 			
-			default: throw new Exception(
+			default:
+				throw new Exception(
 					'could not process change event with object type not supported ('.$objChangeEvent->getObjType().')'
-			);
+				);
 		}
 		
 		$method .= 'Object';

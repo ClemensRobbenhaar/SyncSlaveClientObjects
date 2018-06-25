@@ -11,6 +11,9 @@ include_once("./Services/UIComponent/classes/class.ilUserInterfaceHookPlugin.php
  */
 class ilSyncSlaveClientObjectsPlugin extends ilUserInterfaceHookPlugin
 {
+	/**
+	 * @inheritdoc
+	 */
 	function getPluginName()
 	{
 		return "SyncSlaveClientObjects";

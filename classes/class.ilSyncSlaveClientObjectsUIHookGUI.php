@@ -9,7 +9,7 @@ include_once("./Services/UIComponent/classes/class.ilUIHookPluginGUI.php");
  * linking to the synchronization plugin GUI
  *
  * @author		Björn Heyser <bheyser@databay.de>
- * @version		$Id: class.ilSyncSlaveClientObjectsUIHookGUI.php 31357 2011-10-28 11:12:35Z bheyser $
+ * @author Stefan Meyer <smeyer.ilias@gmx.de>
  *
  */
 class ilSyncSlaveClientObjectsUIHookGUI extends ilUIHookPluginGUI
@@ -29,7 +29,9 @@ class ilSyncSlaveClientObjectsUIHookGUI extends ilUIHookPluginGUI
 	 */
 	function getHTML($a_comp, $a_part, $a_par = array())
 	{
-		global $rbacsystem;
+		global $DIC;
+
+ 		$rbacsystem = $DIC->rbac()->system();
 
 		switch( false )
 		{
@@ -44,8 +46,7 @@ class ilSyncSlaveClientObjectsUIHookGUI extends ilUIHookPluginGUI
 				);
 		}
 		
-		global $tpl;
-		
+		$tpl = $DIC->ui()->mainTemplate();
 		$tpl->addCss($this->getPluginObject()->getDirectory().'/templates/menu_entry.css');
 		
 		$menuEntryTpl = $this->getPluginObject()->getTemplate('tpl.menu_entry.html');
@@ -62,21 +63,8 @@ class ilSyncSlaveClientObjectsUIHookGUI extends ilUIHookPluginGUI
 		);
 	}
 	
-	/**
-	 * Modify GUI objects, before they generate ouput
-	 *
-	 * @param string $a_comp component
-	 * @param string $a_part string that identifies the part of the UI that is handled
-	 * @param string $a_par array of parameters (depend on $a_comp and $a_part)
-	 */
-	function modifyGUI($a_comp, $a_part, $a_par = array())
-	{
-		
-	}
 
 	/**
-	 *
-	 * @global ilCtrl $ilCtrl
 	 * @return string $target
 	 */
 	public function getConfigurationScreenLinkTarget()
@@ -91,6 +79,9 @@ class ilSyncSlaveClientObjectsUIHookGUI extends ilUIHookPluginGUI
 		return $_SESSION[$index];
 	}
 
+	/**
+	 * @return string
+	 */
 	private function buildConfigurationScreenLinkTarget()
 	{
 		$ctrlPath = array(
@@ -99,7 +90,9 @@ class ilSyncSlaveClientObjectsUIHookGUI extends ilUIHookPluginGUI
 			'il'.strtolower($this->getPluginObject()->getPluginName()).'configgui'
 		);
 		
-		global $ilDB;
+		global $DIC;
+
+		$ilDB = $DIC->database();
 		
 		$class_IN_ctrlClasses = $ilDB->in('class', $ctrlPath, false, 'text');
 		

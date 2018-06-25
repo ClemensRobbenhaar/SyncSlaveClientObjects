@@ -7,7 +7,7 @@ include_once("./Services/Component/classes/class.ilPluginConfigGUI.php");
  * the slave client synchronization
  *
  * @author		Björn Heyser <bheyser@databay.de>
- * @version		$Id: class.ilSyncSlaveClientObjectsConfigGUI.php 52595 2014-08-25 14:40:32Z smeyer $
+ * @author Stefan Meyer <smeyer.ilias@gmx.de>
  *
  */
 class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
@@ -20,14 +20,25 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 	const SYNC_OBJS = 1;
 	const SYNC_DB = 2;
 	const SYNC_RBAC = 3;
+
+	/**
+	 * @var \ilLogger
+	 */
+	private $logger = null;
+
 	
 	/**
 	* Handles all commmands, default is "configure"
 	*/
 	function performCommand($cmd)
 	{
-		global $rbacsystem, $ilCtrl, $ilTabs;
-		
+		global $DIC;
+
+		$rbacsystem = $DIC->rbac()->system();
+		$ilCtrl = $DIC->ctrl();
+		$ilTabs = $DIC->tabs();
+		$this->logger = $DIC->logger()->ssco();
+
 		if( !$rbacsystem->checkAccess('read', ADMINISTRATION_SERVICES_PLUGINS_REF_ID) )
 		{
 			throw new ilException('permission denied!');
@@ -79,8 +90,9 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 	
 	private function showSettingsForm()
 	{
-		global $tpl;
+		global $DIC;
 
+		$tpl = $DIC->ui()->mainTemplate();
 		$form = $this->initSettingsForm();
 		$tpl->setContent( $form->getHTML() );
 	}
@@ -90,7 +102,10 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 	 */
 	private function initSettingsForm()
 	{
-		global $lng, $ilCtrl;
+		global $DIC;
+
+		$lng = $DIC->language();
+		$ilCtrl = $DIC->ctrl();
 		
 		$pl = $this->getPluginObject();
 		
@@ -129,10 +144,16 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 		
 		return $form;
 	}
-	
+
+	/**
+	 * Save settings
+	 */
 	private function saveSettings()
 	{
-		global $tpl, $ilCtrl;
+		global $DIC;
+
+		$tpl = $DIC->ui()->mainTemplate();
+		$ilCtrl = $DIC->ctrl();
 		
 		$pl = $this->getPluginObject();
 
@@ -157,20 +178,27 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 		$ilCtrl->redirect($this, 'showSettingsForm');
 	}
 
+	/**
+	 * show sync form
+	 */
 	private function showSyncForm()
 	{
-		global $tpl;
+		global $DIC;
 
+		$tpl = $DIC->ui()->mainTemplate();
 		$form = $this->initSyncForm();
 		$tpl->setContent( $form->getHTML() );
 	}
 	
 	/**
-	 * @return ilPropertyFormGUI $form
+	 * @return \ilPropertyFormGUI $form
 	 */
 	private function initSyncForm()
 	{
-		global $lng, $ilCtrl;
+		global $DIC;
+
+		$lng = $DIC->language();
+		$ilCtrl = $DIC->ctrl();
 		
 		$pl = $this->getPluginObject();
 	
@@ -230,7 +258,11 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 	 */
 	private function performSync()
 	{
-		global $tpl, $lng, $ilCtrl;
+		global $DIC;
+
+		$tpl = $DIC->ui()->mainTemplate();
+		$lng = $DIC->language();
+		$ilCtrl = $DIC->ctrl();
 	
 		$pl = $this->getPluginObject();
 		
@@ -271,17 +303,20 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 			switch($form->getInput('sync_type'))
 			{
 				case self::SYNC_OBJS:
+					$this->logger->info('Starting update of objects');
 					$slaveClientSync->performConnectionCheck($slaveClients);
 					$slaveClientSync->perform($slaveClients);
 					$this->setLastSyncDate($currentSyncDate);
 					break;
 					
 				case self::SYNC_DB:
+					$this->logger->info('Starting update of database.');
 					$slaveClientSync->performConnectionCheck($slaveClients);
 					$slaveClientSync->performDBUpdate($slaveClients);
 					break;
 				
 				case self::SYNC_RBAC:
+					$this->logger->info('Starting update of access control.');
 					$slaveClientSync->performConnectionCheck($slaveClients);
 					$slaveClientSync->performRbacSync($slaveClients);
 					break;
@@ -292,6 +327,9 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 		}
 		catch(Exception $e)
 		{
+
+			$this->logger->warning(get_class($e));
+			$this->logger->logStack();
 			ilUtil::sendFailure(
 				sprintf($pl->txt("perform_sync_started_exception"), $e->getMessage()),
 				true
@@ -307,7 +345,6 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 	}
 
 	/**
-	 *
 	 * @return ilDateTime $lastSyncDate
 	 */
 	private function getLastSyncDate()
