@@ -132,6 +132,14 @@ class sscoSlaveClientObjectAdministration
 
 		$tree = $DIC->repositoryTree();
 
+		// abort this action if group has crs in path
+		$parent_crs = $tree->checkForParentType($refId,'crs');
+		if($parent_crs)
+		{
+			$this->logger->info('Ignoring group creation for group inside course.');
+			return 0;
+		}
+
 		$this->logger->info('Handling create event for group '. ilObject::_lookupTitle($objId).' '.$refId);
 		$writer = $this->buildObjectXml($objId, $refId);
 		$remote_ref = $this->readParentId($refId, true);
@@ -187,14 +195,158 @@ class sscoSlaveClientObjectAdministration
 				$gc->getXml()
 			)
 		);
+	}
 
-		// Add references
-		$this->addReferences($objId,$refId,$remote_refs);
+	/**
+	 * Handle trash group
+	 * @param $objId
+	 * @param $refId
+	 */
+	public function trashGroupObject($objId, $refId)
+	{
+		return $this->handleRemove($objId,$refId);
+	}
+
+	/**
+	 * Handle restore from trash
+	 * @param $objId
+	 * @param $refId
+	 */
+	public function restoreGroupObject($objId, $refId)
+	{
+		$this->createGroupObject($objId, $refId);
+	}
+
+	/**
+	 * Handle remove group
+	 * @param $objId
+	 * @param $refId
+	 */
+	public function removeGroupObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+	// Folders
+	public function createFolderObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		// abort this action if folder has crs in path
+		$parent_crs = $tree->checkForParentType($refId,'crs');
+		if($parent_crs)
+		{
+			$this->logger->info('Ignoring folder creation for group inside course.');
+			return 0;
+		}
+
+		$this->logger->info('Handling create event for folder '. ilObject::_lookupTitle($objId).' '.$refId);
+		$writer = $this->buildObjectXml($objId, $refId);
+		$remote_ref = $this->readParentId($refId, true);
+		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
+		if($remote_item_ref)
+		{
+			$this->logger->info('Folder already created in previous run. Aborting!');
+			return;
+		}
+
+		$new_remote_ref = $this->getSoapClient()->call(
+			'addObject',
+			array(
+				$this->getSoapSid(),
+				$remote_ref,
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+		$this->logger->info('Handling update after creation.');
+		$this->updateFolderObject($objId, $refId);
+		return $new_remote_ref;
+	}
+
+	/**
+	 * Update folder in groups but not in courses.
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function updateFolderObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling update event for '. ilObject::_lookupTitle($objId).' '.$refId);
+		try {
+			$writer = $this->buildObjectXml($objId, $refId, true);
+		}
+		catch(Exception $e) {
+			$this->logger->error('Read object xml failed for '. ilObject::_lookupTitle($objId).' '.$refId);
+			return $this->createFolderObject($objId, $refId);
+		}
+		$this->getSoapClient()->call(
+			'updateObjects',
+			array(
+				$this->getSoapSid(),
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+
+		// move target
+		$target_id = $tree->getParentId($refId);
+		$target_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.ilObject::_lookupObjId($target_id));
+		$target_ref = end($target_refs);
+		$remote_refs = (array) $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
+		$remote_ref = end($remote_refs);
+
+		if($target_ref && $remote_ref)
+		{
+			try {
+				$this->getSoapClient()->call(
+					'moveObject',
+					array(
+						$this->getSoapSid(),
+						$remote_ref,
+						$target_ref
+					)
+				);
+			}
+			catch(Exception $e) {
+				// ignoring exception of same target here
+			}
+		}
+	}
+
+	/**
+	 * Handle trash folder
+	 * @param $objId
+	 * @param $refId
+	 */
+	public function trashFolderObject($objId, $refId)
+	{
+		return $this->handleRemove($objId,$refId);
+	}
+
+	/**
+	 * Handle restore from trash
+	 * @param $objId
+	 * @param $refId
+	 */
+	public function restoreFolderObject($objId, $refId)
+	{
+		$this->createFolderObject($objId, $refId);
+	}
+
+	/**
+	 * Handle remove group
+	 * @param $objId
+	 * @param $refId
+	 */
+	public function removeFolderObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
 	}
 
 
-
-	
 	/**
 	 * @param int $objId
 	 * @param int $refId
@@ -789,7 +941,8 @@ class sscoSlaveClientObjectAdministration
 				return $this->createCategoryObject($parent_obj, $parent_ref);
 			case 'grp':
 				return $this->createGroupObject($parent_obj,$parent_ref);
-
+			case 'fold':
+				return $this->createFolderObject($parent_obj,$parent_ref);
 			default:
 				$this->logger->warning('Invalid parent type given: ' . ilObject::_lookupType($parent_obj));
 		}

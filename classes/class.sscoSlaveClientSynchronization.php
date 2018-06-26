@@ -101,7 +101,7 @@ class sscoSlaveClientSynchronization
 			tobcObjectChangeEvent::EVENT_TYPE_CREATE
 		);
 		
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp'), $eventTypes );
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp','fold'), $eventTypes );
 
 		$this->logger->info('Starting creation of containers ["cat","grp","fold"]...');
 
@@ -115,7 +115,7 @@ class sscoSlaveClientSynchronization
 			tobcObjectChangeEvent::EVENT_TYPE_RESTORE
 		);
 		
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp'), $eventTypes );
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp','fold'), $eventTypes );
 
 		$this->logger->info('Starting update of containers ["cat","grp","fold"]...');
 		self::processEventList($objChangeEventList, $slaveClients);
@@ -126,7 +126,7 @@ class sscoSlaveClientSynchronization
 			tobcObjectChangeEvent::EVENT_TYPE_REMOVE
 		);
 		
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp'), $eventTypes );
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp','fold'), $eventTypes );
 		
 		$GLOBALS['ilLog']->write('Handling delete categories: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
@@ -207,6 +207,9 @@ class sscoSlaveClientSynchronization
 				break;
 			case 'grp':
 				$method .= 'Group';
+				break;
+			case 'fold':
+				$method .= 'Folder';
 				break;
 			case 'htlm':
 				$method .= 'Htlm';
