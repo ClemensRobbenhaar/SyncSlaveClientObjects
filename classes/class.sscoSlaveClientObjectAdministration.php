@@ -540,7 +540,110 @@ class sscoSlaveClientObjectAdministration
 	{
 		$this->handleRemove($objId,$refId);
 	}
-	
+
+
+	// webr
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function createWebResourceObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling create event for webresource '. ilObject::_lookupTitle($objId).' '.$refId);
+		$writer = $this->buildObjectXml($objId, $refId);
+		$remote_parent_ref = $this->readParentId($refId,true);
+		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
+		if($remote_item_ref)
+		{
+			$this->logger->info('Webreource already created in previous run. Aborting!');
+			return;
+		}
+
+		$new_remote_ref = $this->getSoapClient()->call(
+			'addObject',
+			array(
+				$this->getSoapSid(),
+				$remote_parent_ref,
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+
+		$this->updateWebresourceObject($objId, $refId);
+		return $new_remote_ref;
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function updateWebresourceObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling update event for webresource '. ilObject::_lookupTitle($objId).' '.$refId);
+		if($tree->isDeleted($refId))
+		{
+			return;
+		}
+		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
+		$remote_ref = end($remote_refs);
+		if(!count($remote_refs))
+		{
+			return $this->createWebResourceObject($objId, $refId);
+		}
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncWebResourceXmlCache.php');
+
+		$wlc = new ilSyncWebResourceXmlCache($objId);
+		$this->getSoapClient()->call(
+			'updateWebLink',
+			array(
+				$this->getSoapSid(),
+				$remote_ref,
+				$wlc->getXml()
+			)
+		);
+
+		$this->updateMetaData($objId);
+
+		// Add references
+		$this->addReferences($objId,$refId,$remote_refs);
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function trashWebresourceObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function restoreWebresourceObject($objId, $refId)
+	{
+		$this->createWebresourceObject($objId, $refId);
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function removeWebresourceObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+	// Files
+
+
 	/**
 	 * @param integer $objId
 	 * @param integer $refId
@@ -605,12 +708,14 @@ class sscoSlaveClientObjectAdministration
 				file_get_contents($fc->getFile())
 			)
 		);
-		
+
 		$this->updateMetaData($objId);
 
 		// Add references
 		$this->addReferences($objId,$refId,$remote_refs);
 	}
+
+
 
 	/**
 	 * @param integer $objId

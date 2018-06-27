@@ -128,14 +128,14 @@ class sscoSlaveClientSynchronization
 		
 		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp','fold'), $eventTypes );
 		
-		$GLOBALS['ilLog']->write('Handling delete categories: '. memory_get_peak_usage());
+		$GLOBALS['ilLog']->write('Handling delete containers: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
 		
 		// process all events regarding to 'htlm' or 'file' objects
 				
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file') );
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr') );
 		
-		$GLOBALS['ilLog']->write('Handling html/file objects: '. memory_get_peak_usage());
+		$GLOBALS['ilLog']->write('Handling html/file/webr objects: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
 	}
 	
@@ -216,6 +216,9 @@ class sscoSlaveClientSynchronization
 				break;
 			case 'file':
 				$method .= 'File';
+				break;
+			case 'webr':
+				$method .= 'WebResource';
 				break;
 			
 			default:
