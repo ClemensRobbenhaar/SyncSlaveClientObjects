@@ -641,9 +641,101 @@ class sscoSlaveClientObjectAdministration
 		$this->handleRemove($objId,$refId);
 	}
 
+	// sahs
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function createScormObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling create event for scorm '. ilObject::_lookupTitle($objId).' '.$refId);
+		$writer = $this->buildObjectXml($objId, $refId);
+		$remote_parent_ref = $this->readParentId($refId,true);
+		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
+		if($remote_item_ref)
+		{
+			$this->logger->info('Scorm already created in previous run. Aborting!');
+			return;
+		}
+
+		$new_remote_ref = $this->getSoapClient()->call(
+			'addObject',
+			array(
+				$this->getSoapSid(),
+				$remote_parent_ref,
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+
+		$this->updateScormObject($objId, $refId);
+		return $new_remote_ref;
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function updateScormObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+		$this->logger->info('Handling update event for scorm '. ilObject::_lookupTitle($objId).' '.$refId);
+		if($tree->isDeleted($refId))
+		{
+			return;
+		}
+		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
+		$remote_ref = end($remote_refs);
+		if(!count($remote_refs))
+		{
+			return $this->createScormObject($objId, $refId);
+		}
+
+		// Handle file upload
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncScormXmlCache.php');
+
+		$scorm_xml_cache = new ilSyncScormXmlCache($objId);
+		$scorm_xml_cache->getXml();
+
+		$this->updateMetaData($objId);
+
+		// Add references
+		$this->addReferences($objId,$refId,$remote_refs);
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function trashScormObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function restoreScormObject($objId, $refId)
+	{
+		$this->createScormObject($objId, $refId);
+	}
+
+	/**
+	 * @param integer $objId
+	 * @param integer $refId
+	 */
+	public function removeScormObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
 	// Files
-
-
 	/**
 	 * @param integer $objId
 	 * @param integer $refId
@@ -1169,7 +1261,7 @@ class sscoSlaveClientObjectAdministration
 	 */
 	protected function readRemoteRoles($a_remote_ref, $a_global = true)
 	{
-		$this->logger->debug('Update remote roles.');
+		$this->logger->debug('Read remote roles: ' . $a_remote_ref);
 		return $this->getSoapClient()->call(
 				'getLocalRoles',
 					array(
@@ -1315,8 +1407,8 @@ class sscoSlaveClientObjectAdministration
 			$remote_ref = end($remote_refs);
 			
 			$remote_roles = $this->readRemoteRoles($remote_ref,$location == SYSTEM_FOLDER_ID ? true : false);
-			$this->logger->info('Received roles: ');
-			$this->logger->dump($remote_roles);
+			$this->logger->debug('Received roles: ');
+			$this->logger->dump($remote_roles, ilLogLevel::DEBUG);
 
 			// Update and delete remote roles
 			$root = simplexml_load_string(utf8_encode(utf8_decode($remote_roles)));
@@ -1336,7 +1428,7 @@ class sscoSlaveClientObjectAdministration
 						}
 						else
 						{
-							$this->logger->info('Ignoring role template: ' . (string) $xmlRole->Title .' at location: ' . $location );
+							$this->logger->debug('Ignoring role template: ' . (string) $xmlRole->Title .' at location: ' . $location );
 						}
 					}
 					else
@@ -1346,7 +1438,9 @@ class sscoSlaveClientObjectAdministration
 				}
 			}
 		}
-		
+		$this->logger->debug('Available role locations...');
+		$this->logger->dump($available_role_locations, ilLogLevel::DEBUG);
+
 		// Add missing roles
 		foreach(self::$sync_roles as $idx => $role)
 		{
@@ -1358,7 +1452,7 @@ class sscoSlaveClientObjectAdministration
 			{
 				// Create this role
 				$this->logger->info('Adding new local role...');
-				$this->logger->dump($role);
+				//$this->logger->dump($role);
 				$this->addRemoteRole($role);
 			}
 		}
@@ -1378,22 +1472,22 @@ class sscoSlaveClientObjectAdministration
 	
 	/**
 	 * Search remote role
-	 * @param type $a_location
-	 * @param type $a_title
-	 * @param type $a_import_id
+	 * @param int $a_location
+	 * @param string $a_title
+	 * @param string $a_import_id
+	 * @return bool
 	 */
 	protected function searchByRemoteRole($a_location, $a_title, $a_import_id)
 	{
 		$a_title = trim($a_title);
 		foreach(self::$sync_roles as $idx => $role)
 		{
-			$this->logger->info('Comparing role title ' . $a_title .' with ' . $role['title']);
 			if($role['location'] == $a_location)
 			{
 				if($a_title == trim($role['title']))
 				{
 					$this->logger->info('Found role: ');
-					$this->logger->dump($role);
+					//$this->logger->dump($role);
 					return $idx;
 				}
 			}
@@ -1417,32 +1511,35 @@ class sscoSlaveClientObjectAdministration
 		{
 			return self::$sync_roles;
 		}
-		
-		// get all categories
-		$locations = array(
-			0 => ROOT_FOLDER_ID,
-			1 => SYSTEM_FOLDER_ID
-		);
-		
+
+		$locations = [];
+
 		// Append all administration objects
 		foreach($GLOBALS['objDefinition']->getAllRBACObjects() as $rbac_type)
 		{
 			if($GLOBALS['objDefinition']->isAdministrationObject($rbac_type))
 			{
-				if($rbac_type != 'rolf' and $rbac_type != 'adm')
+				$query = 'SELECT ref_id FROM object_reference obr '.
+						'JOIN object_data obd ON obr.obj_id = obd.obj_id '.
+						'WHERE type = '.$ilDB->quote($rbac_type,'text');
+				$res = $ilDB->query($query);
+				while($row = $res->fetchRow(DB_FETCHMODE_OBJECT))
 				{
-					$query = 'SELECT ref_id FROM object_reference obr '.
-							'JOIN object_data obd ON obr.obj_id = obd.obj_id '.
-							'WHERE type = '.$ilDB->quote($rbac_type,'text');
-					$res = $ilDB->query($query);
-					while($row = $res->fetchRow(DB_FETCHMODE_OBJECT))
+					// fix for invalic chatroom objects
+					if(
+						$row->ref_id != ROLE_FOLDER_ID &&
+						ilObject::_lookupType($row->ref_id,true) == 'rolf'
+					)
 					{
-						$locations[] = $row->ref_id;
+						ilLoggerFactory::getLogger('ssco')->warning('Ignoring deprecated rolf object type: ' . $row->ref_id);
+						continue;
 					}
+					$locations[] = $row->ref_id;
 				}
 			}
 		}
-		
+
+		// Append all categories
 		$query = 'SELECT child from tree join object_reference obr on child = obr.ref_id '.
 				'join object_data obd on obr.obj_id = obd.obj_id '.
 				'where type = '.$GLOBALS['ilDB']->quote('cat','text').' '.
@@ -1457,37 +1554,47 @@ class sscoSlaveClientObjectAdministration
 		
 		// store locations 
 		self::$sync_locations = $locations;
-		
+
+		foreach(self::$sync_locations as $loc)
+		{
+			ilLoggerFactory::getLogger('ssco')->debug(ilObject::_lookupType($loc,true));
+		}
+
+
+
+
 		// collect all roles
 		$roles = array();
 		foreach($locations as $location)
 		{
-			if($location)
+			if(!$location)
 			{
-				foreach((array) $GLOBALS['rbacreview']->getRolesOfRoleFolder($location,true) as $role)
+				continue;
+			}
+
+			foreach((array) $GLOBALS['rbacreview']->getRolesOfRoleFolder($location,true) as $role)
+			{
+				if(ilObject::_lookupType($role) != 'role')
 				{
-					if(ilObject::_lookupType($role) != 'role')
-					{
-						$logger->info('Ignoring role/rolt: '  . ilObject::_lookupTitle($role));
-						continue;
-					}
-					
-					$rdata['global'] = ($location == SYSTEM_FOLDER_ID ? 1 : 0);
-					$rdata['assignable'] = $GLOBALS['rbacreview']->isAssignable($role,$location);
-					$rdata['location'] = $location;
-					$rdata['obj_id'] = $role;
-					$rdata['import_id'] = IL_INST_ID.'::'.$role;
-					$rdata['title'] = ilObject::_lookupTitle($role);
-					
-					// Write role template xml
-					include_once './Services/AccessControl/classes/class.ilRoleXmlExport.php';
-					$rexport = new ilRoleXmlExport();
-					$rexport->addRole($role, $location);
-					$rexport->write();
-					$rdata['rxml'] = $rexport->xmlDumpMem();
-					
-					$roles[] = $rdata;
+					$logger->info('Ignoring role/rolt: '  . ilObject::_lookupTitle($role));
+					continue;
 				}
+
+				$rdata['global'] = ($location == ROLE_FOLDER_ID ? 1 : 0);
+				$rdata['assignable'] = $GLOBALS['rbacreview']->isAssignable($role,$location);
+				$rdata['location'] = $location;
+				$rdata['obj_id'] = $role;
+				$rdata['import_id'] = IL_INST_ID.'::'.$role;
+				$rdata['title'] = ilObject::_lookupTitle($role);
+					
+				// Write role template xml
+				include_once './Services/AccessControl/classes/class.ilRoleXmlExport.php';
+				$rexport = new ilRoleXmlExport();
+				$rexport->addRole($role, $location);
+				$rexport->write();
+				$rdata['rxml'] = $rexport->xmlDumpMem();
+
+				$roles[] = $rdata;
 			}
 		}
 		return self::$sync_roles = $roles;

@@ -133,9 +133,9 @@ class sscoSlaveClientSynchronization
 		
 		// process all events regarding to 'htlm' or 'file' objects
 				
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr') );
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr'));
 		
-		$GLOBALS['ilLog']->write('Handling html/file/webr objects: '. memory_get_peak_usage());
+		$GLOBALS['ilLog']->write('Handling html/file/webr/scorm objects: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
 	}
 	
@@ -148,20 +148,21 @@ class sscoSlaveClientSynchronization
 			$slaveClientObjAdm->updateDatabase();
 		}
 	}
-	
-	
+
+
+	/**
+	 * @param $clients
+	 */
 	public function performRbacSync($clients)
 	{
-		$GLOBALS['ilLog']->write(__METHOD__.': Starting rbac sync...');
-		
-		$GLOBALS['ilLog']->write(__METHOD__.': Syncing rbac role import ids');
+		$this->logger->info('starting rbac sync');
+		$this->logger->info('Syncing rbac role import ids');
 		foreach($clients as $client)
 		{
 			$slaveClientObjAdm = sscoSlaveClientObjectAdministration::getInstance($client);
-			$GLOBALS['ilLog']->write(__METHOD__.$slaveClientObjAdm->getSoapSid());
+			$this->logger->debug('Using soap sid: ' . $slaveClientObjAdm->getSoapSid());
 			$slaveClientObjAdm->updateRbacImportIds();
 		}
-		
 	}
 	
 	/**
@@ -219,6 +220,9 @@ class sscoSlaveClientSynchronization
 				break;
 			case 'webr':
 				$method .= 'WebResource';
+				break;
+			case 'sahs':
+				$method .= 'Scorm';
 				break;
 			
 			default:
