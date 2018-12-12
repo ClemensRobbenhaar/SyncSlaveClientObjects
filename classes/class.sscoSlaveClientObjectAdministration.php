@@ -195,6 +195,8 @@ class sscoSlaveClientObjectAdministration
 				$gc->getXml()
 			)
 		);
+
+		$this->updateContainer($objId,$refId);
 	}
 
 	/**
@@ -290,30 +292,7 @@ class sscoSlaveClientObjectAdministration
 				$writer->xmlDumpMem(FALSE)
 			)
 		);
-
-		// move target
-		$target_id = $tree->getParentId($refId);
-		$target_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.ilObject::_lookupObjId($target_id));
-		$target_ref = end($target_refs);
-		$remote_refs = (array) $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
-		$remote_ref = end($remote_refs);
-
-		if($target_ref && $remote_ref)
-		{
-			try {
-				$this->getSoapClient()->call(
-					'moveObject',
-					array(
-						$this->getSoapSid(),
-						$remote_ref,
-						$target_ref
-					)
-				);
-			}
-			catch(Exception $e) {
-				// ignoring exception of same target here
-			}
-		}
+		$this->updateContainer($objId,$refId);
 	}
 
 	/**
@@ -406,13 +385,48 @@ class sscoSlaveClientObjectAdministration
 				$writer->xmlDumpMem(FALSE)
 			)
 		);
-		
-		// move target
-		$target_id = $tree->getParentId($refId);
+
+		$this->updateContainer($objId,$refId);
+	}
+
+
+	/**
+	 * update container xml
+	 * @param $a_obj_id
+	 * @param $a_ref_id
+	 */
+	protected function updateContainer($a_obj_id, $a_ref_id)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncContainerXmlCache.php');
+
+		$cat_cache = ilSyncContainerXmlCache::getInstance($a_obj_id);
+		$path = $cat_cache->getPath();
+
+		$target_id = $tree->getParentId($a_ref_id);
 		$target_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.ilObject::_lookupObjId($target_id));
 		$target_ref = end($target_refs);
-		$remote_refs = (array) $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
+		$remote_refs = (array) $this->getRefIdByImportId(IL_INST_ID.'::'.$a_obj_id);
 		$remote_ref = end($remote_refs);
+
+		try {
+			$this->getSoapClient()->call(
+				'updateContainer',
+				[
+					$this->getSoapSid(),
+					$remote_ref,
+					$path,
+					$a_obj_id
+				]
+			);
+		}
+		catch(Exception $e) {
+			$this->logger->warning('Update container failed with message: ' . $e->getMessage());
+		}
 
 		if($target_ref && $remote_ref)
 		{
