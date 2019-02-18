@@ -355,7 +355,7 @@ class sscoSlaveClientObjectAdministration
             $this->logger->error('Read object xml failed for '. ilObject::_lookupTitle($objId).' '.$refId);
             return;
         }
-        #$this->updateContainer($objId,$refId);
+        $this->updateContainer($objId,$refId);
     }
 
 
