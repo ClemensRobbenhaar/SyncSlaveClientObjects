@@ -329,6 +329,7 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 		{
 
 			$this->logger->warning(get_class($e));
+			$this->logger->warning($e->getMessage());
 			$this->logger->logStack();
 			ilUtil::sendFailure(
 				sprintf($pl->txt("perform_sync_started_exception"), $e->getMessage()),

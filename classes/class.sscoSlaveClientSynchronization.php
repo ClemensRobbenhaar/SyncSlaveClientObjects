@@ -115,9 +115,9 @@ class sscoSlaveClientSynchronization
 			tobcObjectChangeEvent::EVENT_TYPE_RESTORE
 		);
 		
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp','fold'), $eventTypes );
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('root','cat','grp','fold'), $eventTypes );
 
-		$this->logger->info('Starting update of containers ["cat","grp","fold"]...');
+		$this->logger->info('Starting update of containers ["root","cat","grp","fold"]...');
 		self::processEventList($objChangeEventList, $slaveClients);
 		
 		// process all remove events regarding to 'cat','grp' objects
@@ -128,6 +128,7 @@ class sscoSlaveClientSynchronization
 		
 		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypesAndEventTypes( array('cat','grp','fold'), $eventTypes );
 		
+
 		$GLOBALS['ilLog']->write('Handling delete containers: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
 		
@@ -224,6 +225,9 @@ class sscoSlaveClientSynchronization
 			case 'sahs':
 				$method .= 'Scorm';
 				break;
+            case 'root':
+                $method .= 'Root';
+                break;
 			
 			default:
 				throw new Exception(

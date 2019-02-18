@@ -325,6 +325,39 @@ class sscoSlaveClientObjectAdministration
 		$this->handleRemove($objId,$refId);
 	}
 
+    /**
+     * Update category object
+     *
+     * @param int $objId
+     * @param int $refId
+     */
+	public function updateRootObject($objId, $refId)
+    {
+        global $DIC;
+
+        $tree = $DIC->repositoryTree();
+        $this->logger->info('Handling update event for '. ilObject::_lookupTitle($objId).' '.$refId);
+        try {
+            $writer = $this->buildObjectXml($objId, $refId, true);
+            $this->getSoapClient()->call(
+                'updateObjects',
+                array(
+                    $this->getSoapSid(),
+                    $writer->xmlDumpMem(false)
+                )
+            );
+        }
+        catch(ilSoapClientException $e) {
+            $this->logger->error('Update object xml failed for '. ilObject::_lookupTitle($objId).' '.$refId);
+            return;
+        }
+        catch(Exception $e) {
+            $this->logger->error('Read object xml failed for '. ilObject::_lookupTitle($objId).' '.$refId);
+            return;
+        }
+        #$this->updateContainer($objId,$refId);
+    }
+
 
 	/**
 	 * @param int $objId
@@ -473,7 +506,10 @@ class sscoSlaveClientObjectAdministration
 		$writer->xmlStartTag('Object',$params);
 		$writer->xmlElement('Title',array(),ilObject::_lookupTitle($objId));
 		
-		if(ilObject::_lookupType($objId) == 'cat')
+		if(
+		    ilObject::_lookupType($objId) == 'cat' ||
+            ilObject::_lookupType($objId) == 'root'
+        )
 		{
 			include_once './Modules/Category/classes/class.ilObjCategory.php';
 			$writer->xmlStartTag('Translations');
@@ -1134,7 +1170,7 @@ class sscoSlaveClientObjectAdministration
 		}
 
 		/**
-		 * if parent is ROOT_FOLDE ID return it
+		 * if parent is ROOT_FOLDER ID return it
 		 *
 		 * end recursion!!!
 		 */
