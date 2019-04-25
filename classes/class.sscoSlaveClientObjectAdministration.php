@@ -885,7 +885,122 @@ class sscoSlaveClientObjectAdministration
 	{
 		$this->handleRemove($objId,$refId);
 	}
-	
+
+	/**
+	 * Create new learning module
+	 * @param int $obj_id
+	 * @param int $ref_id
+	 */
+	public function createLearningModuleObject($obj_id, $ref_id)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling create event for ILIAS learning module '. ilObject::_lookupTitle($obj_id).'  '.$ref_id);
+		$writer = $this->buildObjectXml($obj_id, $ref_id);
+
+		$remote_parent_ref = $this->readParentId($ref_id,true);
+		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$obj_id);
+		if($remote_item_ref)
+		{
+			$this->logger->info('ILIAS Learning module already created in previous run. Aborting!');
+			return;
+		}
+
+		$new_remote_ref = $this->getSoapClient()->call(
+			'addObject',
+			array(
+				$this->getSoapSid(),
+				$remote_parent_ref,
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+
+		$this->updateLearningModuleObject($obj_id, $ref_id);
+		return $new_remote_ref;
+	}
+
+	/**
+	 * Update learning module
+	 *
+	 * @param int $obj_id
+	 * @param int $ref_id
+	 */
+	public function updateLearningModuleObject($obj_id, $ref_id)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling update event for lm '. ilObject::_lookupTitle($obj_id).' '.$ref_id);
+		if($tree->isDeleted($ref_id))
+		{
+			return;
+		}
+
+		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$obj_id);
+		$remote_ref = end($remote_refs);
+		if(!count($remote_refs))
+		{
+			return $this->createLearningModuleObject($obj_id, $ref_id);
+		}
+
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncLearningModuleXmlCache.php');
+		$hc = ilSyncLearningModuleXmlCache::getInstance($obj_id);
+
+		$this->logger->info($hc->getFile());
+		exit;
+
+		$this->getSoapClient()->call(
+			'updateLearningModule',
+			[
+				$this->getSoapSid(),
+				$remote_ref,
+				$hc->getFile(),
+				ilObjFileBasedLM::_lookupOnline($obj_id),
+				$obj_id,
+				ilObject::_lookupTitle($obj_id),
+				ilObject::_lookupDescription($obj_id),
+			]
+		);
+
+		$this->logger->debug('Using file: ' . $hc->getFile());
+
+		$this->updateMetaData($obj_id);
+		$this->addReferences($obj_id, $ref_id, $remote_refs);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function trashLearningModuleObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function restoreLearningModuleObject($objId, $refId)
+	{
+		$this->createLearningModuleObject($objId, $refId);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function removeLearningModuleObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+
+
 	/**
 	 * @param integer $objId
 	 * @param integer $refId

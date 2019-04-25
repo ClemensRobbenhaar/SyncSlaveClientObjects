@@ -300,11 +300,14 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 			
 			$slaveClientSync = new sscoSlaveClientSynchronization($sscoSettings);
 
+			$this->logger->debug('Starting synchronisation');
+
 			switch($form->getInput('sync_type'))
 			{
 				case self::SYNC_OBJS:
 					$this->logger->info('Starting update of objects');
 					$slaveClientSync->performConnectionCheck($slaveClients);
+					$this->logger->debug('Connection check passed.');
 					$slaveClientSync->perform($slaveClients);
 					$this->setLastSyncDate($currentSyncDate);
 					break;

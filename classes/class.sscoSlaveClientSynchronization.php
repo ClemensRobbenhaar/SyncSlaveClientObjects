@@ -134,7 +134,7 @@ class sscoSlaveClientSynchronization
 		
 		// process all events regarding to 'htlm' or 'file' objects
 				
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr'));
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr', 'lm'));
 		
 		$GLOBALS['ilLog']->write('Handling html/file/webr/scorm objects: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
@@ -189,6 +189,10 @@ class sscoSlaveClientSynchronization
 	 */
 	private static function processEvent(tobcObjectChangeEvent $objChangeEvent, $slaveClientId)
 	{
+		global $DIC;
+
+		$logger = $DIC->logger()->ssco();
+
 		switch( $objChangeEvent->getEventType() )
 		{
 			case tobcObjectChangeEvent::EVENT_TYPE_CREATE:		$method = 'create';		break;
@@ -228,7 +232,10 @@ class sscoSlaveClientSynchronization
             case 'root':
                 $method .= 'Root';
                 break;
-			
+			case 'lm':
+				$method .= 'LearningModule';
+				break;
+
 			default:
 				throw new Exception(
 					'could not process change event with object type not supported ('.$objChangeEvent->getObjType().')'
@@ -244,6 +251,7 @@ class sscoSlaveClientSynchronization
 		
 		if($refId)
 		{
+			$logger->debug('Calling: ' . $method);
 			return $slaveClientObjAdm->$method($objId, $refId);
 		}
 		// Allow only delete
@@ -251,7 +259,7 @@ class sscoSlaveClientSynchronization
 		{
 			return $slaveClientObjAdm->$method($objId, $refId);
 		}
-		$GLOBALS['ilLog']->write(__METHOD__.': Ignoring '.$method.' for deleted references.');
+		$logger->info('Ignoring '.$method.' for deleted references.');
 	}
 	
 	/**
