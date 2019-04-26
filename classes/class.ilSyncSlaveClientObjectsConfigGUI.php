@@ -1,6 +1,8 @@
 <?php
 
 include_once("./Services/Component/classes/class.ilPluginConfigGUI.php");
+
+use ILIAS\FileUpload\Location;
  
 /**
  * GUI class for plugin configuration as well as
@@ -20,6 +22,7 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 	const SYNC_OBJS = 1;
 	const SYNC_DB = 2;
 	const SYNC_RBAC = 3;
+	const SYNC_HELP = 4;
 
 	/**
 	 * @var \ilLogger
@@ -221,27 +224,34 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 		$sync_rbac->setValue(self::SYNC_RBAC);
 		$sync_rbac->setDisabled(false);
 		$type->addOption($sync_rbac);
+
+		$sync_help = new ilRadioOption($pl->txt('sync_help'));
+		$sync_help->setValue(self::SYNC_HELP);
+		$sync_help->setDisabled(false);
+		$type->addOption($sync_help);
+
+		// add help file
+		$help_file = new ilFileInputGUI($pl->txt('help_file'), 'help_file');
+		$help_file->setSuffixes(['zip']);
+		$help_file->setRequired(true);
+		$sync_help->addSubItem($help_file);
+
 		
 		$type->setValue(self::SYNC_OBJS);
 		$type->setRequired(true);
 		
 		$form->addItem($type);
-		
-		
-	
-			// setting 2 (text)
-			$ti = new ilTextInputGUI($pl->txt("sleep_between_soap_requests_label"), "sleep_between_soap_requests");
-			$ti->setInfo($pl->txt("sleep_between_soap_requests_info"));
-			$ti->setRequired(true);
-			$ti->setMaxLength(10);
-			$ti->setSize(10);
-			
-			if( $ti->getValue() === null )
-			{
-				$ti->setValue(3);
-			}
-			
-		
+
+		// setting 2 (text)
+		$ti = new ilTextInputGUI($pl->txt("sleep_between_soap_requests_label"), "sleep_between_soap_requests");
+		$ti->setInfo($pl->txt("sleep_between_soap_requests_info"));
+		$ti->setRequired(true);
+		$ti->setMaxLength(10);
+		$ti->setSize(10);
+
+		if ($ti->getValue() === null) {
+			$ti->setValue(3);
+		}
 		$form->addItem($ti);
 	
 		$form->addCommandButton("performSync", $pl->txt("client_sync_form_start_process"));
@@ -323,6 +333,15 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 					$slaveClientSync->performConnectionCheck($slaveClients);
 					$slaveClientSync->performRbacSync($slaveClients);
 					break;
+
+				case self::SYNC_HELP:
+					$this->logger->info('Starting help package synchronisation.');
+
+					$tmp_file = $this->handleHelpModuleUpload();
+
+					$slaveClientSync->performConnectionCheck($slaveClients);
+					$slaveClientSync->performHelpSync($slaveClients, $tmp_file);
+					break;
 			}
 			
 			// Perform a soap connection check
@@ -346,6 +365,34 @@ class ilSyncSlaveClientObjectsConfigGUI extends ilPluginConfigGUI
 
 		ilUtil::sendSuccess($pl->txt("perform_sync_started_success"), true);
 		$ilCtrl->redirect($this, "showSyncForm");
+	}
+
+	/**
+	 * Handle help module upload
+	 */
+	protected function handleHelpModuleUpload()
+	{
+		global $DIC;
+
+		$uploader = $DIC->upload();
+		$filename = '';
+		if(!$uploader->hasBeenProcessed())
+		{
+			$uploader->process();
+
+			foreach($uploader->getResults() as $result)
+			{
+				$uploader->moveOneFileTo(
+					$result,
+					'',
+					Location::TEMPORARY,
+					$result->getName()
+				);
+				$filename = $result->getName();
+			}
+		}
+		$this->logger->debug('Moved file to: ' . ilUtil::getDataDir().'/temp/'.$filename);
+		return ilUtil::getDataDir().'/temp/'.$filename;
 	}
 
 	/**

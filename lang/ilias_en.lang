@@ -19,3 +19,4 @@ sync_type#:#Type of Synchronisation
 sync_objs#:#Synchronise Objects
 sync_rbac#:#Synchronise Permissions
 sync_db#:#Update Databases
+sync_help#:#Update Help

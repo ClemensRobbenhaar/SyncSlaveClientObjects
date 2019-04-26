@@ -19,3 +19,4 @@ sync_type#:#Synchronisierungsart
 sync_objs#:#Objekte synchronisieren
 sync_rbac#:#Rechte synchronisieren
 sync_db#:#Datenbanken aktualisieren
+sync_help#:#Hilfe aktualisieren

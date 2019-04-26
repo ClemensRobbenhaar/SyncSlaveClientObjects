@@ -120,6 +120,35 @@ class sscoSlaveClientObjectAdministration
 			);
 	}
 
+
+	/**
+	 * Update online help package
+	 *
+	 * @param string $file
+	 *
+	 */
+	public function updateHelp($file)
+	{
+		global $DIC;
+
+		$global_settings = $DIC->settings();
+
+		$this->logger->info('Using help package: ' . $file);
+		try {
+			$this->getSoapClient()->call(
+				'createHelp',
+				[
+					$this->getSoapSid(),
+					$global_settings->get('help_mode'),
+					$file
+				]
+			);
+		}
+		catch(Exception $e) {
+			$this->logger->warning('Update help package failed with message: ' . $e->getMessage());
+		}
+	}
+
 	// Groups
 
 	/**
@@ -950,9 +979,6 @@ class sscoSlaveClientObjectAdministration
 		$plugin->includeClass('class.ilSyncLearningModuleXmlCache.php');
 		$hc = ilSyncLearningModuleXmlCache::getInstance($obj_id);
 
-		$this->logger->info($hc->getFile());
-		exit;
-
 		$this->getSoapClient()->call(
 			'updateLearningModule',
 			[
@@ -1764,6 +1790,8 @@ class sscoSlaveClientObjectAdministration
 		}
 		return self::$sync_roles = $roles;
 	}
+
+
 
 
 

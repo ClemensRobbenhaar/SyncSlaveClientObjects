@@ -165,6 +165,24 @@ class sscoSlaveClientSynchronization
 			$slaveClientObjAdm->updateRbacImportIds();
 		}
 	}
+
+
+	/**
+	 * Synchronise help packages.
+	 * @param string[] $clients
+	 * @param string $file
+	 *
+	 */
+	public function performHelpSync($clients, $file)
+	{
+		$this->logger->debug('Starting help synchronisation.');
+		foreach($clients as $client)
+		{
+			$client_sync = sscoSlaveClientObjectAdministration::getInstance($client);
+			$client_sync->updateHelp($file);
+		}
+		return true;
+	}
 	
 	/**
 	 * @param tobcObjectChangeEventList	$objChangeEventList
