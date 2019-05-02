@@ -134,9 +134,9 @@ class sscoSlaveClientSynchronization
 		
 		// process all events regarding to 'htlm' or 'file' objects
 				
-		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr', 'lm'));
+		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr', 'lm', 'blog'));
 		
-		$GLOBALS['ilLog']->write('Handling html/file/webr/scorm objects: '. memory_get_peak_usage());
+		$GLOBALS['ilLog']->write('Handling html/file/webr/scorm/blog objects: '. memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
 	}
 	
@@ -252,6 +252,10 @@ class sscoSlaveClientSynchronization
                 break;
 			case 'lm':
 				$method .= 'LearningModule';
+				break;
+
+			case 'blog'	:
+				$method .= 'Blog';
 				break;
 
 			default:

@@ -915,6 +915,111 @@ class sscoSlaveClientObjectAdministration
 		$this->handleRemove($objId,$refId);
 	}
 
+	// Blogs
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function createBlogObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling create event for blog '. ilObject::_lookupTitle($objId).' '.$refId);
+		$writer = $this->buildObjectXml($objId, $refId);
+		$remote_ref = $this->readParentId($refId, true);
+		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
+		if($remote_item_ref)
+		{
+			$this->logger->info('Blog already created in previous run. Aborting!');
+			return;
+		}
+
+		$new_remote_ref = $this->getSoapClient()->call(
+			'addObject',
+			array(
+				$this->getSoapSid(),
+				$remote_ref,
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+		$this->logger->info('Handling update after creation.');
+		$this->updateBlogObject($objId, $refId);
+		return $new_remote_ref;
+	}
+	/**
+	 * Update learning module
+	 *
+	 * @param int $obj_id
+	 * @param int $ref_id
+	 */
+	public function updateBlogObject($obj_id, $ref_id)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling update event for blog '. ilObject::_lookupTitle($obj_id).' '.$ref_id);
+		if($tree->isDeleted($ref_id))
+		{
+			return;
+		}
+
+		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$obj_id);
+		$remote_ref = end($remote_refs);
+		if(!count($remote_refs))
+		{
+			return $this->createBlogObject($obj_id, $ref_id);
+		}
+
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncBlogXmlCache.php');
+		$hc = ilSyncBlogXmlCache::getInstance($obj_id);
+
+		$this->getSoapClient()->call(
+			'updateBlog',
+			[
+				$this->getSoapSid(),
+				$remote_ref,
+				$hc->getFile(),
+				$obj_id
+			]
+		);
+
+		$this->logger->debug('Using file: ' . $hc->getFile());
+		$this->addReferences($obj_id, $ref_id, $remote_refs);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function trashBlogObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function restoreBlogObject($objId, $refId)
+	{
+		$this->createLearningModuleObject($objId, $refId);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function removeBlogObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+
 	/**
 	 * Create new learning module
 	 * @param int $obj_id
