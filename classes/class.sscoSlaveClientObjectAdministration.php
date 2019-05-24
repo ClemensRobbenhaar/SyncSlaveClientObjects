@@ -949,6 +949,7 @@ class sscoSlaveClientObjectAdministration
 		$this->updateBlogObject($objId, $refId);
 		return $new_remote_ref;
 	}
+
 	/**
 	 * Update learning module
 	 *
@@ -1018,6 +1019,126 @@ class sscoSlaveClientObjectAdministration
 	{
 		$this->handleRemove($objId,$refId);
 	}
+
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function createItemGroupObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling create event for ItemGroup '. ilObject::_lookupTitle($objId).' '.$refId);
+		$writer = $this->buildObjectXml($objId, $refId);
+		$remote_ref = $this->readParentId($refId, true);
+		$remote_item_ref = $this->getObjIdByImportId(IL_INST_ID.'::'.$objId);
+		if($remote_item_ref)
+		{
+			$this->logger->info('ItemGroup already created in previous run. Aborting!');
+			return;
+		}
+
+		$new_remote_ref = $this->getSoapClient()->call(
+			'addObject',
+			array(
+				$this->getSoapSid(),
+				$remote_ref,
+				$writer->xmlDumpMem(FALSE)
+			)
+		);
+		$this->logger->info('Handling update after creation.');
+		$this->updateItemGroupObject($objId, $refId);
+		return $new_remote_ref;
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function updateItemGroupObject($objId, $refId)
+	{
+		global $DIC;
+
+		$tree = $DIC->repositoryTree();
+
+		$this->logger->info('Handling update event for ItemGroup '. ilObject::_lookupTitle($objId).' '.$refId);
+		if($tree->isDeleted($refId))
+		{
+			return;
+		}
+
+		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
+		$remote_ref = end($remote_refs);
+		if(!count($remote_refs))
+		{
+			return $this->createBlogObject($objId, $refId);
+		}
+
+		$plugin = new ilSyncSlaveClientObjectsPlugin();
+		$plugin->includeClass('class.ilSyncItemGroupXmlCache.php');
+		$hc = ilSyncItemGroupXmlCache::getInstance($objId);
+
+		// find all item group items
+		$item_group_items = new ilItemGroupItems($refId);
+		$mappings = [];
+		foreach($item_group_items->getItems() as $item_ref_id)
+		{
+			$local_obj_id = ilObject::_lookupObjId($item_ref_id);
+			if($local_obj_id) {
+				$mappings[] = ($local_obj_id . '__' . IL_INST_ID . '::' . $local_obj_id);
+			}
+		}
+		$this->logger->dump($mappings);
+
+
+		$this->getSoapClient()->call(
+			'updateItemGroup',
+			[
+				$this->getSoapSid(),
+				$remote_ref,
+				$hc->getFile(),
+				$objId,
+				$mappings
+			]
+		);
+		$this->logger->debug('Using file: ' . $hc->getFile());
+		$this->addReferences($objId, $refId, $remote_refs);
+
+		return true;
+	}
+
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function trashItemGroupObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function restoreItemGroupObject($objId, $refId)
+	{
+		$this->createLearningModuleObject($objId, $refId);
+	}
+
+	/**
+	 * @param int $objId
+	 * @param int $refId
+	 */
+	public function removeItemGroupObject($objId, $refId)
+	{
+		$this->handleRemove($objId,$refId);
+	}
+
+
 
 
 	/**
