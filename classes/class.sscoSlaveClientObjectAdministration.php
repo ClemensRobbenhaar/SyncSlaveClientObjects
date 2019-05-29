@@ -1074,7 +1074,7 @@ class sscoSlaveClientObjectAdministration
 		$remote_ref = end($remote_refs);
 		if(!count($remote_refs))
 		{
-			return $this->createBlogObject($objId, $refId);
+			return $this->createItemGroupObject($objId, $refId);
 		}
 
 		$plugin = new ilSyncSlaveClientObjectsPlugin();
