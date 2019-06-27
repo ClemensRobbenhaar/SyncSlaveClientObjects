@@ -10,7 +10,7 @@
  */
 class sscoSlaveClientObjectAdministration
 {
-	const SOAP_RESPONSE_TIMEOUT = 300;
+	const SOAP_RESPONSE_TIMEOUT = 1800;
 	const SOAP_TIMEOUT = 600;
 
 	/**
@@ -475,6 +475,16 @@ class sscoSlaveClientObjectAdministration
 		$remote_refs = (array) $this->getRefIdByImportId(IL_INST_ID.'::'.$a_obj_id);
 		$remote_ref = end($remote_refs);
 
+		// add mappings for subitems
+		$subs = $tree->getChildsByType($a_ref_id, 'itgr');
+		$mappings = [];
+		foreach($subs as $itgr) {
+			$local_obj_id = ilObject::_lookupObjId($itgr['child']);
+			if($local_obj_id) {
+				$mappings[] = ($itgr['child']. '__' . $local_obj_id . '__' . IL_INST_ID . '::' . $local_obj_id);
+			}
+		}
+
 		try {
 			$this->getSoapClient()->call(
 				'updateContainer',
@@ -482,7 +492,8 @@ class sscoSlaveClientObjectAdministration
 					$this->getSoapSid(),
 					$remote_ref,
 					$path,
-					$a_obj_id
+					$a_obj_id,
+					$mappings
 				]
 			);
 		}
@@ -1211,7 +1222,7 @@ class sscoSlaveClientObjectAdministration
 				$this->getSoapSid(),
 				$remote_ref,
 				$hc->getFile(),
-				ilObjFileBasedLM::_lookupOnline($obj_id),
+				ilObjContentObject::_lookupOnline($obj_id),
 				$obj_id,
 				ilObject::_lookupTitle($obj_id),
 				ilObject::_lookupDescription($obj_id),
@@ -1438,59 +1449,64 @@ class sscoSlaveClientObjectAdministration
 		global $DIC;
 
 		$ilSetting = $DIC->settings();
+		$tree = $DIC->repositoryTree();
 
 		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.$objId);
 		$remote_ref = end($remote_refs);
 		
-		// not possible if trash is off
-		#if(ilObject::_lookupType($objId) == 'cat')
-		{
-			// Check if empty
-			$xml = $this->getSoapClient()->call(
-					'getTreeChilds',
-					array(
-						$this->getSoapSid(),
-						$remote_ref,
-						array(),
-						0
-					)
-				);
-			$xml = simplexml_load_string(utf8_encode(utf8_decode($xml)));
-			
-			// check for imported objects
-			if(count($xml->Object))
-			{
-				foreach($xml->Object as $client_obj)
-				{
-					$this->logger->info('Found '.(string) $client_obj->Title . ' with import id '. (string) $client_obj->ImportId);
-					$import_id = (string) $client_obj->ImportId;
-					if(preg_match('/^[0-9]+::/', $import_id))
-					{
-						$this->logger->debug('--- matches');
-						continue;
-					}
-					$this->logger->warning('Cannot delete non empty category. Aborting!');
-					$title = ilObject::_lookupTitle($objId);
-					$client_id = explode('::',$this->getSoapSid());
-					throw new Exception('Cannote delete non empty category with title "'. $title.'" for client ' . $client_id[1] . '. Found "'. (string) $client_obj->Title.'" of type '.(string) $client_obj['type'].'!');
-				}
-			}
-		}
-		
-		
-		if($remote_ref)
-		{
-			$this->getSoapClient()->call(
-				'removeFromSystemByImportId',
+		// Check if empty
+		$xml = $this->getSoapClient()->call(
+				'getTreeChilds',
 				array(
 					$this->getSoapSid(),
-					IL_INST_ID . '::' . $objId
+					$remote_ref,
+					array(),
+					0
 				)
 			);
+		$xml = simplexml_load_string(utf8_encode(utf8_decode($xml)));
+			
+		// check for imported objects
+		if(count($xml->Object))
+		{
+			foreach($xml->Object as $client_obj)
+			{
+				$this->logger->info('Found '.(string) $client_obj->Title . ' with import id '. (string) $client_obj->ImportId);
+				$import_id = (string) $client_obj->ImportId;
+				if(preg_match('/^[0-9]+::/', $import_id))
+				{
+					$this->logger->debug('--- matches');
+					continue;
+				}
+				$this->logger->warning('Cannot delete non empty category. Aborting!');
+				$title = ilObject::_lookupTitle($objId);
+				$client_id = explode('::',$this->getSoapSid());
+				throw new Exception('Cannote delete non empty container with title "'. $title.'" for client ' . $client_id[1] . '. Found "'. (string) $client_obj->Title.'" of type '.(string) $client_obj['type'].'!');
+			}
 		}
 
-		// Finally add left references
-		$this->addReferences($objId, $refId, $remote_refs);
+		$reference_available = false;
+		$available_reference = null;
+		foreach(ilObject::_getAllReferences($objId) as $idx => $local_ref_id) {
+			if(!$tree->checkForParentType($local_ref_id,'crs')) {
+				$reference_available = true;
+				$available_reference = $local_ref_id;
+				continue;
+			}
+		}
+
+		if(!$reference_available) {
+			$this->getSoapClient()->call(
+				'removeFromSystemByImportId',
+				[
+					$this->getSoapSid(),
+					IL_INST_ID . '::' . $objId
+				]
+			);
+		}
+		if($available_reference) {
+			$this->addReferences($objId, $available_reference, $remote_refs);
+		}
 	}
 
 	/**
@@ -1583,10 +1599,11 @@ class sscoSlaveClientObjectAdministration
 			$local_parent = $tree->getParentId($local_ref);
 			$local_parent_obj = ilObject::_lookupObjId($local_parent);
 			$local_parent_type = ilObject::_lookupType($local_parent_obj);
-			if($local_parent_type != 'root' and $local_parent_type != 'cat')
-			{
+
+			if($tree->checkForParentType($local_ref,'crs')) {
 				continue;
 			}
+
 			$rpr = $this->getRefIdByImportId(IL_INST_ID.'::'.$local_parent_obj);
 			$tmp = end($rpr);
 			if($tmp)
@@ -1610,20 +1627,27 @@ class sscoSlaveClientObjectAdministration
 				);
 			} 
 			catch (Exception $e) {
-				// is ignored
+				$this->logger->error($e->getMessage());
 			}
 		}
 		
 		// Delete deprecated
 		foreach(array_diff($remote_parent_refs_available, $remote_parent_refs_required) as $drop_ref_target)
 		{
-			$this->getSoapClient()->call(
-				'removeReferenceByImportId', array(
-					$this->getSoapSid(),
-					IL_INST_ID.'::'.$objId,
-					$drop_ref_target
-				)
+			try {
+				$this->getSoapClient()->call(
+					'removeReferenceByImportId', array(
+						$this->getSoapSid(),
+						IL_INST_ID.'::'.$objId,
+						$drop_ref_target
+					)
 				);
+			}
+			catch(Exception $e) {
+				$this->logger->error($e->getMessage());
+				throw $e;
+			}
+
 		}
 	}
 

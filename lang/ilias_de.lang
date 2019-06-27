@@ -20,3 +20,4 @@ sync_objs#:#Objekte synchronisieren
 sync_rbac#:#Rechte synchronisieren
 sync_db#:#Datenbanken aktualisieren
 sync_help#:#Hilfe aktualisieren
+help_file#:#Hilfe-Datei von help.ilias.de

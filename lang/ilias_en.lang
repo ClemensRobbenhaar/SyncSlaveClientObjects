@@ -20,3 +20,5 @@ sync_objs#:#Synchronise Objects
 sync_rbac#:#Synchronise Permissions
 sync_db#:#Update Databases
 sync_help#:#Update Help
+help_file#:#Help File from help.ilias.de
+
