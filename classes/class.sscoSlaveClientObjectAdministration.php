@@ -1794,7 +1794,7 @@ class sscoSlaveClientObjectAdministration
 		$rbacreview = $DIC->rbac()->review();
 
 		$remote_refs = $this->getRefIdByImportId(IL_INST_ID.'::'.ilObject::_lookupObjId($a_location),true);
-		$remote_ref = end($remote_refs);
+		foreach($remote_refs as $remote_ref) {
 
 		$parent_roles = $rbacreview->getParentRoleIds($a_location);
 		
@@ -1827,6 +1827,7 @@ class sscoSlaveClientObjectAdministration
 					)
 			);
 		}
+		} // end foreach $remote_refs
 		return true;
 	}
 	
@@ -1838,6 +1839,7 @@ class sscoSlaveClientObjectAdministration
 	 */
 	public function updateRbacImportIds()
 	{
+		if (true) { // set to false if synching only a few explicitely defined contents
 		$roles = self::readRelevantRoles();
 
 		// Get roles of all locations
@@ -1903,7 +1905,8 @@ class sscoSlaveClientObjectAdministration
 		{
 			$this->updateRemoteTemplatePermissions($role);
 		}
-		
+		}
+
 		// Update permissions
 		foreach(self::$sync_locations as $ref_id)
 		{
