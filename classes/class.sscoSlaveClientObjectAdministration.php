@@ -1326,6 +1326,16 @@ class sscoSlaveClientObjectAdministration
 		$plugin = new ilSyncSlaveClientObjectsPlugin();
 		$plugin->includeClass('class.ilSyncHtmlXmlCache.php');
 		$hc = ilSyncHtmlXmlCache::getInstance($objId);
+
+		$descriptions = ilObject::getLongDescriptions(array($objId));
+		if (key_exists($objId, $descriptions)) {
+			$description = $descriptions[$objId];
+		}
+		if (!$description)
+		{
+			$description = ilObject::_lookupDescription($objId);
+		}
+
 		$this->getSoapClient()->call(
 			'updateHtmlLearningModule',
 			array(
@@ -1335,7 +1345,7 @@ class sscoSlaveClientObjectAdministration
 				ilObjFileBasedLM::_lookupOnline($objId),
 				$objId,
 				ilObject::_lookupTitle($objId),
-				ilObject::_lookupDescription($objId),
+				$description,
 				ilObjFileBasedLM::lookupStartFile($objId)
 			)
 		);
