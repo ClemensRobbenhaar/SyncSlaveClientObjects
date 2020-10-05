@@ -135,8 +135,9 @@ class sscoSlaveClientSynchronization
 		// process all events regarding to 'htlm' or 'file' objects
 				
 		$objChangeEventList = tobcObjectChangeEventList::getListByObjTypes( array('htlm', 'file', 'webr', 'lm', 'blog', 'itgr'));
-		
-		$GLOBALS['ilLog']->write('Handling html/file/webr/scorm/blog objects: '. memory_get_peak_usage());
+		self::createItemGroupDummyEvents($objChangeEventList);
+
+		$GLOBALS['ilLog']->write('Handling html/file/webr/scorm/blog objects: ' . count($objChangeEventList) . ' mem: ' . memory_get_peak_usage());
 		self::processEventList($objChangeEventList, $slaveClients);
 	}
 	
@@ -288,6 +289,58 @@ class sscoSlaveClientSynchronization
 		$logger->info('Ignoring '.$method.' for deleted references.');
 	}
 	
+
+	/**
+	 * For every create event in the list add an artifical, non-persistent event
+	 * to update all item groups containing the new item.
+	 * This avoids having the item replicated but not its position in the item group.
+	 *
+	 * Implementation Note: we do not return a new event list, as their constructor
+	 * is private and we would have to create a dummy one by doing a DB search
+	 * which either is guaranteed to return no events, or remove the events found afterwards.
+	 * This seems just a bit too silly.
+	 *
+	 * @param $objChangeEventList the list of events to be searched for create-events;
+	 *   this list will also be updated in place by appending the artificial events.
+	 * @return the updated event list, containing the events for containers to be updated
+	 */
+	private static function createItemGroupDummyEvents($objChangeEventList)
+	{
+		$obj_ids = array();
+		foreach ($objChangeEventList as $event) {
+			if ($event->getEventType() != tobcObjectChangeEvent::EVENT_TYPE_CREATE) {
+				continue;
+			}
+			$obj_ids[] = $event->getObjId();
+		}
+		global $ilDB;
+
+		$updatedItems = $ilDB->in('r.obj_id', $obj_ids, false, 'integer');
+		$statement = 'SELECT distinct item_group_id ' .
+			'FROM item_group_item i, object_reference r, object_data o ' .
+			'WHERE r.ref_id = i.item_ref_id AND o.obj_id = item_group_id AND o.type=\'itgr\' AND ' .
+			$updatedItems;
+
+		// can be done in one query as
+		// select distinct item_group_id from item_group_item i, object_reference r, object_data o
+		//  where r.ref_id = i.item_ref_id and o.obj_id = item_group_id and r.obj_id in
+		//   (select evt_obj_id from evnt_evhk_tobc_events where evt_event_type = 'CREATE');
+
+		$resultSet = $ilDB->query($statement);
+		while( $dataSet = $ilDB->fetchAssoc($resultSet) )
+		{
+			$objectChangeEvent = new tobcObjectChangeEvent();
+			$objectChangeEvent->setObjId($dataSet['item_group_id'])
+				->setObjType('itgr')
+				->setEventType(tobcObjectChangeEvent::EVENT_TYPE_UPDATE)
+				->setId(-1)
+				;
+			$objChangeEventList->addEvent($objectChangeEvent);
+		}
+
+		return $objChangeEventList;
+	}
+
 	/**
 	 * @return string $soapLogin
 	 */
